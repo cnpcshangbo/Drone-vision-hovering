@@ -19,6 +19,10 @@ Python, pip, dronekit 2.8
 
 First Run
 =================================
+Test baudrate:
+
+screen /dev/ttyUSB
+
 Kill dslink;
 
 `cd scripts`
