@@ -126,9 +126,9 @@ function initCanvas(){
 		
 		for(var i = 0; i < colorRGB.data.length;i=i+4){
 		//console.log(colorRGB.data);
-		var rr=colorRGB.data[i+2];
+		var rr=colorRGB.data[i];
 		var gg=colorRGB.data[i+1];
-		var bb=colorRGB.data[i+0];
+		var bb=colorRGB.data[i+2];
 		//console.log( rgb2hsv(rr, gg, bb) );
 		hsv=rgb2hsv(rr, gg, bb);
 		hsv_img.data[i]=hsv.h;
