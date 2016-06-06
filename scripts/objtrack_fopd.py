@@ -294,7 +294,11 @@ class Objtrack:
             deltax3=0
             deltax2=0
             deltax1=0
-
+            debug_flag=0
+            if (debug_flag==1):
+               print 'Display debug message.'
+            else:
+               print 'Hide debug message.'            
             print "Ready to go!"
 
             while(True):
@@ -403,6 +407,7 @@ class Objtrack:
                  cv2.line(newframe,(320,240),(int(320+100*math.sin(-yaw_origin)),int(240-100*math.cos(-yaw_origin))),(255,255,255),1)
                  cv2.putText(newframe,"N: " + str(math.degrees(yaw_origin))[0:5],(int(320+100*math.sin(-yaw_origin)),int(240-100*math.cos(-yaw_origin))),font,0.3,(255,255,255),1)
                  #print 'yaw_origin=', yaw_origin
+                 print 'Flight mode=',self.vehicle.mode.name
                  if self.vehicle.mode.name!="LOITER":#visual-guided
                  #if 1:#visual-guided
                     '''
