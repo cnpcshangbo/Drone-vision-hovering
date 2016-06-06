@@ -25,8 +25,8 @@ class Objtrack:
         #self.api = local_connect()    #from droneapi.lib-->__init__.py,commented by ljx 
 
         # Our vehicle (we assume the user is trying to control the first vehicle attached to the GCS)
-        #self.vehicle = self.api.get_vehicles()[0]
-        self.vehicle = connect('/dev/ttyMFD1,921600', wait_ready=True)
+        #self.vehicle = self.api.get_vehicles()[0]/dev/ttyMFD1, 921600
+        self.vehicle = connect('0.0.0.0:14551', wait_ready=True)
         self.frame=None
         self.webframe=None
         self.webframe_masked=None
@@ -335,10 +335,19 @@ class Objtrack:
               cv2.putText(newframe,'max: ' + str(self.max),(10,240), font, 0.3,(255,255,255),1)
               #print 'New video frame. Time: %s' % (time.time()) 
               #print xpos
-              
-              RC5VAL=float(self.vehicle.channels['5'])  
-              RC6VAL=float(self.vehicle.channels['6'])
-              RC7VAL=self.vehicle.channels['7']  
+              print self.vehicle.channels['5']
+              if self.vehicle.channels['5'] is not None:
+                 RC5VAL=float(self.vehicle.channels['5']) 
+              else:
+                 RC5VAL=1400              
+              if self.vehicle.channels['6'] is not None:                 
+                 RC6VAL=float(self.vehicle.channels['6'])
+              else:
+                 RC6VAL=1400              
+              if self.vehicle.channels['7'] is not None:    
+                 RC7VAL=self.vehicle.channels['7']
+              else:
+                 RC7VAL=1400              
               if RC7VAL==0 or RC7MAX is None:
                  gain=last_gain
               #else:
@@ -564,7 +573,7 @@ class Objtrack:
         #Shang uncommented here.
 
         video_writer.release()  
-        # bus.exit()
+        bus.exit()
 
 
 
