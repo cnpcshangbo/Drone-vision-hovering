@@ -19,7 +19,7 @@ First Run
 `cd scripts`
 `python objtrack-fopi.py` 
 PS: Current progress:
-![alt tag](https://files.slack.com/files-tmb/T0M3RTFQ9-F20ATJP9C-a5384b4bf5/pasted_image_at_2016_08_10_11_19_pm_720.png)
+https://files.slack.com/files-tmb/T0M3RTFQ9-F20ATJP9C-a5384b4bf5/pasted_image_at_2016_08_10_11_19_pm_720.png
 
 
 
