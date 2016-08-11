@@ -15,7 +15,7 @@ from time import time
 import math
 import cv2
 import numpy
-from dronekit import LocationGlobal
+from droneapi.lib import Location
 import balloon_config
 from balloon_video import balloon_video
 import balloon_utils
@@ -28,7 +28,7 @@ class BalloonSimulator(object):
     def __init__(self):
 
         # read fake balloon location from config file
-        self.fake_balloon_location = LocationGlobal(balloon_config.config.get_float('fake-balloon', 'lat',-35.363274),
+        self.fake_balloon_location = Location(balloon_config.config.get_float('fake-balloon', 'lat',-35.363274),
                                               balloon_config.config.get_float('fake-balloon', 'lon',149.164630),
                                               balloon_config.config.get_float('fake-balloon', 'alt',15))
 
@@ -39,14 +39,14 @@ class BalloonSimulator(object):
 
         # convert colour to BGR palette
         fake_balloon_colour_bgr = cv2.cvtColor(numpy.uint8([[[h,s,v]]]),cv2.COLOR_HSV2BGR)
-        self.fake_balloon_colour_bgr_scalar = [fake_balloon_colour_bgr.item(0), fake_balloon_colour_bgr.item(1), fake_balloon_colour_bgr.item(2)]
+        self.fake_balloon_colour_bgr_scalar = cv2.cv.Scalar(fake_balloon_colour_bgr.item(0), fake_balloon_colour_bgr.item(1), fake_balloon_colour_bgr.item(2))
 
         # fake balloon is same radius as actual balloon
         self.fake_balloon_radius = balloon_finder.balloon_radius_expected
 
         # background sky and ground colours
         self.background_sky_colour_bgr = (232, 228, 227)
-        self.background_ground_colour_bgr_scalar = [87, 145, 158]
+        self.background_ground_colour_bgr_scalar = cv2.cv.Scalar(87, 145, 158)
 
         # last iterations balloon radius
         self.last_balloon_radius = 0
@@ -123,7 +123,7 @@ class BalloonSimulator(object):
     def main(self):
 
         # set home to tridge's home field (absolute alt = 270)
-        PositionVector.set_home_location(LocationGlobal(-35.362938,149.165085,0))
+        PositionVector.set_home_location(Location(-35.362938,149.165085,0))
 
         # calculate balloon position
         fake_balloon_pos = PositionVector.get_from_location(self.fake_balloon_location)

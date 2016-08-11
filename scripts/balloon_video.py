@@ -16,22 +16,9 @@ from multiprocessing import Process, Pipe
 import cv2
 import balloon_config
 
-# import pi camera if present
-try:
-    from picamera.array import PiRGBArray as PiRGBArray
-    from picamera import PiCamera as PiCamera
-except ImportError:
-    print "picamera not installed - please install if running on RPI"
-
 class BalloonVideo:
 
     def __init__(self):
-        # camera type - 0=web cam, 1=RPI camera
-        self.camera_type = balloon_config.config.get_integer('camera','type',1)
-
-        # camera objects
-        self.camera = None
-
         # get image resolution
         self.img_width = balloon_config.config.get_integer('camera','width',640)
         self.img_height = balloon_config.config.get_integer('camera','height',480)
@@ -58,68 +45,27 @@ class BalloonVideo:
     def __str__(self):
         return "BalloonVideo Object W:%d H:%d" % (self.img_width, self.img_height)
 
-    # initialise camera
-    def init_camera(self):
-        # return immediately if already initialised
-        if not self.camera is None:
-            return
- 
-        # use webcam
-        if self.camera_type == 0:
-            self.camera = cv2.VideoCapture(0)
-            #self.camera.set(cv2.cv.CV_CAP_PROP_FRAME_WIDTH,self.img_width)
-            #self.camera.set(cv2.cv.CV_CAP_PROP_FRAME_HEIGHT,self.img_height)
+    # get_camera - initialises camera and returns VideoCapture object 
+    def get_camera(self):
+        # setup video capture
+        self.camera = cv2.VideoCapture(0)
+        self.camera.set(cv2.cv.CV_CAP_PROP_FRAME_WIDTH,self.img_width)
+        self.camera.set(cv2.cv.CV_CAP_PROP_FRAME_HEIGHT,self.img_height)
 
-            # check we can connect to camera
-            if not self.camera.isOpened():
-                print "failed to open camera, exiting!"
-                sys.exit(0)
+        # check we can connect to camera
+        if not self.camera.isOpened():
+            print "failed to open camera, exiting!"
+            sys.exit(0)
 
-        # use rpi camera
-        if self.camera_type == 1:
-            self.camera = PiCamera()
-            self.camera.resolution = (self.img_width,self.img_height)
-            # to-do: check we can connect to camera
-
-    # close camera
-    def close_camera(self):
-        # return immediately if already initialised
-        if not self.camera is None:
-            return
-        # use webcam
-        if self.camera_type == 0:
-            self.camera.release()
-        # use rpi camera
-        if self.camera_type == 1:
-            self.camera.close()
-
-    # capture image from camera
-    def capture_image(self):
-        # check camera is initialised
-        self.init_camera()
-
-        # use webcam
-        if self.camera_type == 0:
-            success_flag, image=self.camera.read()
-            return image
-
-        # use rpi camera
-        if self.camera_type == 1:
-            image_array = PiRGBArray(self.camera)
-            self.camera.capture(image_array, format="bgr")
-            image = image_array.array
-            return image
+        return self.camera
 
     # open_video_writer - begin writing to video file
     def open_video_writer(self):
         # Define the codec and create VideoWriter object
         # Note: setting ex to -1 will display pop-up requesting user choose the encoder
-        ex = cv2.VideoWriter_fourcc('M','J','P','G')
+        ex = int(cv2.cv.CV_FOURCC('M','J','P','G'))
         self.video_writer = cv2.VideoWriter(self.video_filename, ex, 25, (self.img_width,self.img_height))
-        if not self.video_writer is None:
-            print "started recording video to %s" % self.video_filename
-        else:
-            print "failed to start recording video to %s" % self.video_filename
+    
         return self.video_writer
 
     # pixels_to_angle_x - converts a number of pixels into an angle in radians 
@@ -152,17 +98,17 @@ class BalloonVideo:
             return
 
         # open the camera
-        self.init_camera()
+        camera = self.get_camera()
 
         # clear latest image
         latest_image = None
 
         while True:
             # constantly get the image from the webcam
-            image = self.capture_image()
+            success_flag, image=camera.read()
 
             # if successful overwrite our latest image
-            if not image is None:
+            if success_flag:
                 latest_image = image
 
             # check if the parent wants the image
@@ -176,7 +122,7 @@ class BalloonVideo:
                 imgcap_connection.send(latest_image)
 
         # release camera when exiting
-        self.close_camera()
+        camera.release()
 
     # start_background_capture - starts background image capture
     def start_background_capture(self):

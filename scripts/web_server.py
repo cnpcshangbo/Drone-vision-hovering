@@ -95,7 +95,7 @@ class Webserver(object):
 
         cherrypy.engine.start()
         # cherrypy.engine.block()
-
+        print "Cherrypy initial completed."
     def close(self):
         cherrypy.engine.stop()
 

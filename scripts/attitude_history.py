@@ -5,13 +5,13 @@ AttitudeHistory class : provides delayed attitude and location information
 import math
 import time
 from pymavlink import mavutil
-from dronekit import VehicleMode, Attitude
+from droneapi.lib import VehicleMode, Location, Attitude
 from balloon_utils import wrap_PI
 
 class AttitudeHistory(object):
 
-    def __init__(self, dronekit_vehicle, max_delay):
-        self.vehicle = dronekit_vehicle # reference to drone api's vehicle for retrieving attitude and location
+    def __init__(self, droneapi_vehicle, max_delay):
+        self.vehicle = droneapi_vehicle # reference to drone api's vehicle for retrieving attitude and location
         self.max_delay = max_delay      # maximum expected delay in seconds
         self.last_update = 0            # system time of last update call
         self.att_dict = dict()          # initialise attitude dictionary
@@ -171,9 +171,11 @@ if __name__ == "__main__":
 else:
     # for testing in the simulator
 
-    connection_str = balloon_config.config.get_string('dronekit','connection_string','/dev/ttyUSB0') 
-    connection_baud = balloon_config.config.get_integer('dronekit','baud',921600)
-    vehicle = dronekit.connect(connection_str, connection_baud)
+    # get drone api
+    api = local_connect()
+
+    # Our vehicle (we assume the user is trying to control the first vehicle attached to the GCS)
+    vehicle = api.get_vehicles()[0]
 
     # create test attitude history class with maximum 2 second delay
     test_atthist = AttitudeHistory(vehicle, 2.0)

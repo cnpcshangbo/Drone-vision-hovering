@@ -5,7 +5,7 @@ sys.path.insert(1, os.getcwd())
 import time
 import math
 from pymavlink import mavutil
-from dronekit import connect, VehicleMode, LocationGlobal
+from droneapi.lib import VehicleMode, Location
 import balloon_config
 from balloon_video import balloon_video
 from balloon_utils import get_distance_from_pixels, wrap_PI
@@ -48,8 +48,11 @@ Then arm it an takeoff as in mavproxy_sequence.txt
 class BalloonStrategy(object):
     def __init__(self):
 
-        # connect to vehicle with dronekit
-        self.vehicle = self.get_vehicle_with_dronekit()
+        # First get an instance of the API endpoint (the connect via web case will be similar)
+        self.api = local_connect()
+
+        # Our vehicle (we assume the user is trying to control the virst vehicle attached to the GCS)
+        self.vehicle = self.api.get_vehicles()[0]
 
         # initialised flag
         self.home_initialised = False
@@ -147,29 +150,12 @@ class BalloonStrategy(object):
         # velocity controller update rate
         self.vel_update_rate = balloon_config.config.get_float('general','VEL_UPDATE_RATE_SEC',0.2)
 
-        # stats
-        self.num_frames_analysed = 0
-        self.stats_start_time = 0
-
-    # connect to vehicle with dronekit
-    def get_vehicle_with_dronekit(self):
-        connection_str = balloon_config.config.get_string('dronekit','connection_string','/dev/ttyUSB0') 
-        connection_baud = balloon_config.config.get_integer('dronekit','baud',921600)
-        print "connecting to vehicle on %s, baud=%d" % (connection_str, connection_baud)
-        return connect(connection_str, baud=connection_baud)
-        print "connected to vehicle"
-
     # fetch_mission - fetch mission from flight controller
     def fetch_mission(self):
         # download the vehicle waypoints
-        print "fetching mission.."
         self.mission_cmds = self.vehicle.commands
         self.mission_cmds.download()
-        self.mission_cmds.wait_ready()
-        if not self.mission_cmds is None:
-            print "retrieved mission with %d commands" % self.mission_cmds.count
-        else:
-            print "failed to retrieve mission"
+        self.mission_cmds.wait_valid()
 
     # check home - intermittently checks for changes to the home location
     def check_home(self):
@@ -186,38 +172,34 @@ class BalloonStrategy(object):
 
             # check if we have a vehicle
             if self.vehicle is None:
-                self.vehicle = self.get_vehicle_with_dronekit()
+                self.vehicle = self.api.get_vehicles()[0]
                 return
 
-            # download the vehicle waypoints (and home) if we don't have them already
+            # ensure the vehicle's position is known
+            if self.vehicle.location is None:
+                return False
+            if self.vehicle.location.lat is None or self.vehicle.location.lon is None or self.vehicle.location.alt is None:
+                return False
+
+            # download the vehicle waypoints if we don't have them already
             if self.mission_cmds is None:
                 self.fetch_mission()
                 return False
 
-            # ensure the vehicle's position is known
-            if self.vehicle.location.global_relative_frame is None:
-                print "waiting for vehicle position.."
-                return False
-            if self.vehicle.location.global_relative_frame.lat is None or self.vehicle.location.global_relative_frame.lon is None or self.vehicle.location.global_relative_frame.alt is None:
-                print "waiting for vehicle position.."
+            # get the home lat and lon
+            home_lat = self.mission_cmds[0].x
+            home_lon = self.mission_cmds[0].y
+
+            # sanity check the home position
+            if home_lat is None or home_lon is None:
                 return False
 
-            # get home location from mission command list
-            if self.vehicle.home_location is None:
-                print "waiting for home location.."
-                self.fetch_mission()
-                return False
-
-            # sanity check home position
-            if self.vehicle.home_location.lat == 0 and self.vehicle.home_location.lon == 0:
-                print "home position all zero, re-fetching.."
-                self.fetch_mission()
-                return False
-
-            # set home position
-            PositionVector.set_home_location(LocationGlobal(self.vehicle.home_location.lat,self.vehicle.home_location.lon,0))
-            self.home_initialised = True
-            print "got home location"
+            # sanity check again and set home position
+            if home_lat <> 0 and home_lon <> 0:
+                PositionVector.set_home_location(Location(home_lat,home_lon,0))
+                self.home_initialised = True
+            else:
+                self.mission_cmds = None
 
             # To-Do: if we wish to have the same home position as the flight controller
             # we must download the home waypoint again whenever the vehicle is armed
@@ -243,13 +225,11 @@ class BalloonStrategy(object):
         if self.vehicle.mode.name == "GUIDED":
             if not self.controlling_vehicle:
                 self.controlling_vehicle = True
-                print "taking control of vehicle in GUIDED"
                 # clear out any limits on balloon position
                 self.mission_alt_min = 1
                 self.mission_alt_max = 0
                 self.mission_distance_max = 50
                 # start search for balloon
-                print "starting search alt_min:%f alt_max:%f dist_max:%f" % (self.mission_alt_min, self.mission_alt_max, self.mission_distance_max)
                 self.start_search()
             return
 
@@ -270,18 +250,14 @@ class BalloonStrategy(object):
             if active_command_id == 92:
                 if not self.controlling_vehicle:
                     self.controlling_vehicle = True
-                    print "taking control of vehicle in AUTO"
                     self.mission_alt_min = self.vehicle.commands[active_command].param2
                     self.mission_alt_max = self.vehicle.commands[active_command].param3
                     self.mission_distance_max = self.vehicle.commands[active_command].param4
-                    print "starting search alt_min:%f alt_max:%f dist_max:%f" % (self.mission_alt_min, self.mission_alt_max, self.mission_distance_max)
                     self.start_search()
                 return    
     
         # if we got here then we are not in control
-        if self.controlling_vehicle:
-            self.controlling_vehicle = False
-            print "giving up control of vehicle in %s" % self.vehicle.mode.name 
+        self.controlling_vehicle = False
 
     # condition_yaw - send condition_yaw mavlink command to vehicle so it points at specified heading (in degrees)
     def condition_yaw(self, heading):
@@ -340,7 +316,7 @@ class BalloonStrategy(object):
     # get_frame - get a single frame from the camera or simulator
     def get_frame(self):
         if self.use_simulator:
-            veh_pos = PositionVector.get_from_location(self.vehicle.location.global_relative_frame)
+            veh_pos = PositionVector.get_from_location(self.vehicle.location)
             frame = balloon_sim.get_simulated_frame(veh_pos, self.vehicle.attitude.roll, self.vehicle.attitude.pitch, self.vehicle.attitude.yaw)
         else:
             frame = balloon_video.get_image()
@@ -358,7 +334,7 @@ class BalloonStrategy(object):
         now = time.time()
 
         # capture vehicle position
-        self.vehicle_pos = PositionVector.get_from_location(self.vehicle.location.global_relative_frame)
+        self.vehicle_pos = PositionVector.get_from_location(self.vehicle.location)
 
         # capture vehicle attitude in buffer
         self.att_hist.update()
@@ -394,11 +370,6 @@ class BalloonStrategy(object):
         # save image for debugging later
         if not self.writer is None:
             self.writer.write(f)
-
-        # increment frames analysed for stats
-        self.num_frames_analysed += 1
-        if self.stats_start_time == 0:
-            self.stats_start_time = time.time()
 
     # start_search - start search for balloon
     def start_search(self):
@@ -576,25 +547,8 @@ class BalloonStrategy(object):
         # FIXME - check if vehicle altitude is too low
         # FIXME - check if we are too far from the desired flightplan
 
-    def output_frame_rate_stats(self):
-        # get current time
-        now = time.time()
-
-        # output stats each 10seconds
-        time_diff = now - self.stats_start_time 
-        if time_diff < 10 or time_diff <= 0:
-            return
-
-        # output frame rate
-        frame_rate = self.num_frames_analysed / time_diff
-        print "FrameRate: %f (%d frames in %f seconds)" % (frame_rate, self.num_frames_analysed, time_diff)
-
-        # reset stats
-        self.num_frames_analysed = 0
-        self.stats_start_time = now
-
     def run(self):
-        while True:
+        while not self.api.exit:
 
             # only process images once home has been initialised
             if self.check_home():
@@ -615,9 +569,6 @@ class BalloonStrategy(object):
                 else:
                     # move towards balloon
                     self.move_to_balloon()
-
-                # output stats
-                self.output_frame_rate_stats()
 
             # Don't suck up too much CPU, only process a new image occasionally
             time.sleep(0.05)

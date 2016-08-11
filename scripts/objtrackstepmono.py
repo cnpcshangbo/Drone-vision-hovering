@@ -1,0 +1,275 @@
+import time
+import cv2
+import math
+from droneapi.lib import VehicleMode, Location
+from pymavlink import mavutil
+import balloon_config
+from balloon_video import balloon_video
+from balloon_utils import get_distance_from_pixels, wrap_PI
+from position_vector import PositionVector
+from find_balloon import balloon_finder
+from fake_balloon import balloon_sim
+import pid
+from attitude_history import AttitudeHistory
+from web_server import Webserver
+import numpy as np
+from MAVProxy.modules.lib import mp_module
+
+class Objtrack:
+     def __init__(self):
+
+        # First get an instance of the API endpoint (the connect via web case will be similar)
+        self.api = local_connect()    #from droneapi.lib-->__init__.py,commented by ljx 
+
+        # Our vehicle (we assume the user is trying to control the first vehicle attached to the GCS)
+        self.vehicle = self.api.get_vehicles()[0]
+                
+        self.frame=None
+        self.timelast=time.time()
+
+        # horizontal velocity pid controller.  maximum effect is 10 degree lean
+        xy_p = balloon_config.config.get_float('general','VEL_XY_P',1.0)
+        xy_i = balloon_config.config.get_float('general','VEL_XY_I',0.0)
+        xy_d = balloon_config.config.get_float('general','VEL_XY_D',0.0)
+        xy_imax = balloon_config.config.get_float('general','VEL_XY_IMAX',10.0)
+        self.vel_xy_pid = pid.pid(xy_p, xy_i, xy_d, math.radians(xy_imax))
+
+        # vertical velocity pid controller.  maximum effect is 10 degree lean
+        z_p = balloon_config.config.get_float('general','VEL_Z_P',2.5)
+        z_i = balloon_config.config.get_float('general','VEL_Z_I',0.0)
+        z_d = balloon_config.config.get_float('general','VEL_Z_D',0.0)
+        z_imax = balloon_config.config.get_float('general','VEL_IMAX',10.0)
+        self.vel_z_pid = pid.pid(z_p, z_i, z_d, math.radians(z_imax))
+
+        # velocity controller min and max speed
+        self.vel_speed_min = balloon_config.config.get_float('general','VEL_SPEED_MIN',1.0)
+        self.vel_speed_max = balloon_config.config.get_float('general','VEL_SPEED_MAX',4.0)
+        self.vel_speed_last = 0.0   # last recorded speed
+        self.vel_accel = balloon_config.config.get_float('general','VEL_ACCEL', 0.5)    # maximum acceleration in m/s/s
+        self.vel_dist_ratio = balloon_config.config.get_float('general','VEL_DIST_RATIO', 0.5) 
+
+     def vel_control(self,vel_setx,vel_sety):
+          msg =self.vehicle.message_factory.set_position_target_local_ned_encode(
+                                                     0,       # time_boot_ms (not used)
+                                                     0, 0,    # target system, target component
+                                                     mavutil.mavlink.MAV_FRAME_BODY_NED, # frame
+                                                     0b0000111111000111, # type_mask (only speeds enabled)
+                                                     0, 0, 0, # x, y, z positions (not used)
+                                                     #velocity_x, velocity_y, velocity_z, # x, y, z velocity in m/s
+                                                     vel_setx,vel_sety,0,#right side direction
+                                                     0, 0, 0, # x, y, z acceleration (not used)
+                                                     0, 0)    # yaw, yaw_rate (not used)
+          # send command to vehicle
+
+          self.vehicle.send_mavlink(msg)
+          self.vehicle.flush()
+          time.sleep(0.1)
+
+     def run(self):
+
+        yawangle=0.0
+        last_mode=None
+        try:
+            #print "starting web server"
+            # initialise web server which will display final image
+            #web = Webserver(balloon_config.config.parser, (lambda : self.frame_filtered))
+            #web=Webserver(balloon_config.config.parser,(lambda:self.frame))
+
+                 
+            print "initialising camera"
+            # initialise video capture
+            camera = balloon_video.get_camera()
+            
+
+            print "Ready to go!"
+            
+            while(True):
+              #print(self.vehicle)
+              if self.vehicle is None:
+                #print('0.5')
+                self.vehicle=self.api.get_vehicles()[0]
+                #print('1')
+              #print('1.5')
+              
+              # get a frame
+              _, frame = camera.read()
+              self.balloon_found, xpos, ypos, size = balloon_finder.analyse_frame(frame)
+              
+              self.frame=frame
+
+              #deltatime=time.time()-self.timelast
+              #self.timelast=time.time()
+              #print "time difference:",deltatime
+              #print "velocity x:",self.vehicle.velocity[0]
+              
+                
+              if self.vehicle.mode.name=="LOITER":
+                 last_mode="LOITER"
+                 print "Overriding a RC channel" 
+                 self.vehicle.channel_override = {"2" : 1400}
+                 self.vehicle.flush()
+                 print "Current overrides are:", self.vehicle.channel_override     
+                 print "Cancel override"
+                 time.sleep(3)
+                 #self.vehicle.channel_override={"2":0}
+                 #self.vehicle.flush()   
+                 #time.sleep(1)
+                 self.vehicle.channel_override = {"2" : 1600}
+                 self.vehicle.flush()
+                 time.sleep(3)
+                 '''
+                 self.vehicle.channel_override = {"1":1600,"2" : 1400}
+                 self.vehicle.flush()
+
+                 time.sleep(5)
+                 print "Current overrides1 are right-forward:", self.vehicle.channel_override
+                 self.vehicle.channel_override = {"1":1400,"2" : 1600}
+                 self.vehicle.flush()
+
+                 time.sleep(5)
+                 print "Current overrides2 are left-afterward:", self.vehicle.channel_override
+                 '''
+
+              else:
+                 if last_mode=="LOITER":
+                    self.vehicle.channel_override={"1":0,"2":0}
+                    self.vehicle.flush()
+                    time.sleep(0.08)
+                    last_mode=None 
+
+ 
+
+              #if self.balloon_found and self.vehicle.mode.name=="GUIDED":  
+              if self.vehicle.mode.name=="GUIDED":#only for testing speed command,response characteristics 
+                 last_mode="GUIDED"
+                 self.vel_control(0,0)
+                 time.sleep(3)
+  
+                 print"guided"
+                 #velx_set=[]
+                 #velx_cur=[]
+                 #velx_time=[]
+
+                 log_filename='step%s' % (time.time())
+                 #print 'log filename',log_filename
+                 f = open(log_filename, mode='a+')
+                 f.write("STEP RESPONSE LOG DATA %s\n"%(time.localtime()))
+                 f.write("time\tspeed_set\tspeed_real\n")
+
+                 vel_setx=0.5
+                 vel_sety=0
+
+                 if self.vehicle.location is None:
+                    print 'location is unknown'
+                 else
+                    ref_home_location = Location(self.vehicle.location.lat,self.vehicle.location.lon,self.vehicle.location.alt)
+
+                 for i in range(1, 201):
+                      deltatime=time.time()-self.timelast
+
+                      self.vel_control(vel_setx,vel_sety)                      
+                      f.write("%f\t%f\t%f\t%f\t%f\n" % (deltatime,vel_setx,self.vehicle.velocity[0],vel_sety,self.vehicle.velocity[1]))
+                      time.sleep(0.1)
+  
+                 self.vel_control(0,0)
+                 time.sleep(3)
+                 
+                 vel_setx=0
+                 vel_sety=0.5
+                 for i in range(1, 201):
+                      deltatime=time.time()-self.timelast
+
+                      self.vel_control(vel_setx,vel_sety)
+                      f.write("%f\t%f\t%f\t%f\t%f\n" % (deltatime,vel_setx,self.vehicle.velocity[0],vel_sety,self.vehicle.velocity[1]))
+                      time.sleep(0.1)
+                 
+                 self.vel_control(0,0)
+                 time.sleep(3)
+
+                 vel_setx=-0.5 
+                 vel_sety=0
+                 for i in range(1, 201):
+                      deltatime=time.time()-self.timelast
+
+                      self.vel_control(vel_setx,vel_sety)
+                      f.write("%f\t%f\t%f\t%f\t%f\n" % (deltatime,vel_setx,self.vehicle.velocity[0],vel_sety,self.vehicle.velocity[1]))  
+                      time.sleep(0.1) 
+
+
+                 self.vel_control(0,0)
+                 time.sleep(3)
+
+                 vel_setx=0 
+                 vel_sety=-0.5 
+                 for i in range(1, 201):
+                      deltatime=time.time()-self.timelast
+
+                      self.vel_control(vel_setx,vel_sety)
+                      f.write("%f\t%f\t%f\t%f\t%f\n" % (deltatime,vel_setx,self.vehicle.velocity[0],vel_sety,self.vehicle.velocity[1]))
+                      time.sleep(0.1)
+
+                 self.vel_control(0,0)
+                 time.sleep(3)
+
+                 while(self.vehicle.mode.name=="GUIDED"):
+
+                         self.vehicle.mode.name="LAND"
+                         self.vehicle.mode = VehicleMode("LAND")
+                         self.vehicle.flush()
+                         time.sleep(1)
+                 while(self.vehicle.armed is True):
+                         self.vehicle.armed=False
+                         self.vehicle.flush()
+                         time.sleep(1)
+
+                 f.close()
+
+  
+                      #altitude_origin=self.get_mav_param('%s_MIN'  % param, 0) 
+                      #print "altitude:",altitude_origin
+                      #print "Location: %s" % self.vehicle.location.alt
+
+              else:
+                 if last_mode=="GUIDED":
+                    last_mode=None
+                    self.vel_control(0,0)
+
+
+              time.sleep(0.1)
+                
+        # handle interrupts
+        except:
+            print "interrupted, exiting"
+
+        # exit and close web server
+        print "exiting..."
+        #web.close()
+
+     def arm_and_takeoff():
+        """Dangerous: Arm and takeoff vehicle - use only in simulation"""
+        # NEVER DO THIS WITH A REAL VEHICLE - it is turning off all flight safety checks
+        # but fine for experimenting in the simulator.
+        print "Arming and taking off"
+        self.vehicle.mode    = VehicleMode("STABILIZE")
+        self.vehicle.parameters["ARMING_CHECK"] = 0
+        self.vehicle.armed   = True
+        self.vehicle.flush()
+
+        while not self.vehicle.armed and not api.exit:
+            print "Waiting for arming..."
+            time.sleep(1)
+
+            print "Taking off!"
+            self.vehicle.commands.takeoff(20) # Take off to 20m height
+
+            # Pretend we have a RC transmitter connected
+            rc_channels = self.vehicle.channel_override
+            rc_channels[3] = 1500 # throttle
+            self.vehicle.channel_override = rc_channels
+
+            self.vehicle.flush()
+            time.sleep(10)
+
+            
+strat = Objtrack()
+strat.run()

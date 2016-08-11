@@ -84,7 +84,7 @@ class BalloonFinder(object):
         blob_params.filterByArea = False
         #blob_params.minArea = 20
         #blob_params.maxArea = 500
-        blob_detector = cv2.SimpleBlobDetector_create(blob_params)
+        blob_detector = cv2.SimpleBlobDetector(blob_params)
         keypts = blob_detector.detect(dilate_img)
     
         # draw centers of all keypoints in new image
@@ -98,7 +98,7 @@ class BalloonFinder(object):
                     kp_max = kp
     
             # draw circle around the largest blob
-            cv2.circle(frame,(int(kp_max.pt[0]),int(kp_max.pt[1])),int(kp_max.size),(0,255,0),2)
+            cv2.circle(frame,(int(kp_max.pt[0]),int(kp_max.pt[1])),int(kp_max.size),(255,0,0),6)
     
             # set the balloon location
             balloon_found = True
@@ -170,8 +170,7 @@ class BalloonFinder(object):
     def main(self):
         web = Webserver(balloon_config.config.parser, (lambda : self.frame))
 
-        # initialise camera
-        balloon_video.init_camera()
+        camera = balloon_video.get_camera()
         video_writer = balloon_video.open_video_writer()
 
         # get start time
@@ -181,7 +180,7 @@ class BalloonFinder(object):
         while(time.time() - start_time < 20):
 
             # Take each frame
-            frame = balloon_video.capture_image()
+            _, frame = camera.read()
             self.frame = frame
 
             # is there the x & y position in frame of the largest balloon
@@ -205,7 +204,7 @@ class BalloonFinder(object):
         cv2.destroyAllWindows()
 
         # release camera
-        balloon_video.close_camera()
+        camera.release()
 
 # create the global balloon_finder object
 balloon_finder = BalloonFinder()

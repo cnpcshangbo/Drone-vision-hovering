@@ -76,13 +76,13 @@ class ColourFinder:
     
             print "initialising camera"
             # initialise video capture
-            balloon_video.init_camera()
+            camera = balloon_video.get_camera()
     
             print "Ready to go!"
 
             while(True):
                 # get a frame
-                frame = balloon_video.capture_image()
+                _, frame = camera.read()
     
                 # Convert BGR to HSV
                 hsv_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)

@@ -1,10 +1,4 @@
-[dronekit]
-#connection_string = "/dev/ttyUSB0"
-#baud = 921600
-
 [camera]
-## set type to 0 for webcam, 1 for RPi camera ##
-#type = 0
 #width = 640
 #height = 480
 #horizontal-fov = 70.42
