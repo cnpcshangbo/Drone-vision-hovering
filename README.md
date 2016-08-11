@@ -10,6 +10,7 @@ Dronesmith Luci platform with breakout board. A UVC camera is connected to the b
 Software Prerequisites
 ================================
 Adding repos;
+
 Python, pip, dronekit 2.8
 
 `pip install pymavlink`
@@ -21,9 +22,11 @@ First Run
 Kill dslink;
 
 `cd scripts`
+
 `python objtrack-fopi.py` 
 
 PS: Current progress:
+
 https://files.slack.com/files-tmb/T0M3RTFQ9-F20ATJP9C-a5384b4bf5/pasted_image_at_2016_08_10_11_19_pm_720.png
 
 
