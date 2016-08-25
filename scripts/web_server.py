@@ -69,8 +69,8 @@ class Image_masked(object):
 
 class Static:
     def __init__(self):
-        self.max=175
-        self.min=145
+        self.max=14
+        self.min=3
         self.smax=255
         self.smin=20
         self.vmax=255
