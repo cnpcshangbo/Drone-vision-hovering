@@ -236,12 +236,16 @@ class Objtrack:
             #Shang uncommented here. 
 			#web=Webserver(balloon_config.config.parser,(lambda:self.frame))
 
-            fourcc = cv2.cv.CV_FOURCC(*'XVID')
+            fourcc = cv2.VideoWriter_fourcc(*'XVID')
             video_name='FOPD_%s.avi' % (time.time())
             video_writer = cv2.VideoWriter(video_name,fourcc, 1.0, (640,480))
             
             print "Initialising camera."
             # initialise video capture
+            if not video_writer is None:
+              print "started recording video to %s" % video_name
+            else:
+              print "failed to start recording video to %s" % video_name
             camera = balloon_video.get_camera()
             
             log_gname='FOPD_%s.txt' % (time.time())
