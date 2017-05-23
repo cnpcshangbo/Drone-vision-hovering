@@ -1,6 +1,8 @@
 #remark:obj tracking with proportional control,single axis x and y, w/o vision control
 #original image size:640*480
-#fopi
+#fopd
+#The import file has changed to let it work with DroneKit 2
+#The connecting string has changed to fit Intel Aero Drone
 import time
 import cv2
 import math
@@ -26,7 +28,7 @@ class Objtrack:
 
         # Our vehicle (we assume the user is trying to control the first vehicle attached to the GCS)
         #self.vehicle = self.api.get_vehicles()[0]/dev/ttyMFD1, 921600
-        self.vehicle = connect('0.0.0.0:14551', wait_ready=True)
+        self.vehicle = connect('tcp:127.0.0.1:5760', wait_ready=True)
         self.frame=None
         self.webframe=None
         self.webframe_masked=None
@@ -579,4 +581,3 @@ class Objtrack:
 
 strat = Objtrack()
 strat.run()
-
