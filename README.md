@@ -37,19 +37,11 @@ Test baudrate:
 
 screen /dev/ttyUSB
 
-Kill dslink;
-
 `cd scripts`
 
 `python objtrack-fopi.py` 
 
-Visit: http://192.168.0.102:8081/ to get the GUI. (192.168.0.102 needs to be changed to the drone's IP.)
-
-PS: Current progress:
-
-https://files.slack.com/files-tmb/T0M3RTFQ9-F22355DA4-83cbe3c2ec/pasted_image_at_2016_08_16_10_31_pm_720.png
-
-
+Visit: http://192.168.0.102:8081/ to get the GUI. (192.168.0.102 needs to be changed to the drone's IP address.)
 
 Thank the project of ardupilot-balloon-finder
 ========================
